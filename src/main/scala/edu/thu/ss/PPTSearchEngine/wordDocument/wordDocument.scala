@@ -12,9 +12,8 @@ import java.io._
 object wordDocument {    
    val conf = new SparkConf().setAppName("app").setMaster("local[4]")
    val sc = new SparkContext(conf)  
-  
-   def main(args : Array[String]){    
-         
+   
+   def main(args : Array[String]){ 
      val dataDir = Config.getString("dataDir") 
      val WDMdir = Config.getString("WDMdir")
      val IDMdir = Config.getString("IDMdir")
@@ -23,28 +22,54 @@ object wordDocument {
      /*
       * WDM.txt, each line is word, docId, weight
       * IDM.txt, each line is word, docId, docId, docId...
-      */
-     
+      
+      
      val WDM = getWordDocumentMatric(dataDir)    
      outputWordDocumentMatric(WDM,WDMdir) 
      //printWDM(WDM)   
      val IDM = getInverseDocumentMatric(WDM) 
      outputInverseDocumentMatric(IDM, IDMdir)     
-     //printIDM(IDM)
+     //printIDM(IDM)*/
      
      /* if already have WDM.txt and IDM.txt*/
-     /*
+     
      val WDM = inputWordDocumentMatric(WDMdir)
-     val IDM = inputInverseDocumentMatric(IDMdir)
-     */
+     val IDM = inputInverseDocumentMatric(IDMdir)     
      val result = search_bool(query, IDM)     
+     val sortedResult = search_VSM(query, result, WDM)
      println("query: " + query)
      println("result: " + result.mkString(","))   
-     
+     println("sorted: " + result.mkString(","))   
      sc.stop()    
    }  
    
-
+   def queryToArray(query:String) : Array[(String,Double)]={
+     val temp = Array((query))
+     val result = sc.makeRDD(temp).flatMap(line=>line.split(" ")).map(x=>(x,1.0)).reduceByKey((a,b)=>a+b)
+     result.collect()
+   }
+   
+   def search_VSM(query:String,relatedDoc:Array[Int], WDM:Array[(String, Int, Double)]):Array[Int]= {
+      
+      val words = query.split(" ")  
+      val vec = sc.makeRDD(queryToArray(query))
+      val vecLenSq = vec.map({case(x,y)=>y*y}).sum()
+      val wdm_rdd = sc.makeRDD(WDM)
+      val docLenSq = wdm_rdd.map({case(t,d,w)=>(d,w*w)}).reduceByKey((a,b)=>a+b).filter(line=>relatedDoc.contains(line._1))
+      val wdm = wdm_rdd.filter(line=>words.contains(line._1) && relatedDoc.contains(line._2))  
+      val cosine = wdm.map({case(t,d,w)=>(t,(d,w))}).join(vec)
+                 .map({case(t,((d,w),w2))=>(d,(t,w,w2))}).join(docLenSq)
+                 .map({case(d, ((t, w1, w2), docSq))=>(d,w1*w2/scala.math.sqrt(vecLenSq*docSq))}).reduceByKey((a,b)=>a+b)      
+      val rt = cosine.sortBy(_._2,false).map(x=>x._1.toInt).collect()
+      
+      
+      val docLenSqPrint = docLenSq.map(x=>x._1.toString+","+x._2.toString).collect().mkString("|")
+      val cosinePrint = cosine.sortBy(_._2,false).map(x=>x._1.toString+","+x._2.toString).collect().mkString("|")
+      println("docLen: " + docLenSqPrint)
+      println("cosine: " + cosinePrint)
+      rt
+   }
+   
    def search_bool(inputQuery:String, IDM:Array[(String,Array[Int])]):Array[Int] = {          
      val query = inputQuery.split(" ")   
      val IDM_ = IDM.toMap
@@ -67,8 +92,7 @@ object wordDocument {
    }
    
    def getInverseDocumentMatric(WDM:Array[(String, Int, Double)]):Array[(String,Array[Int])] = {
-     val WDM_ = WDM.map({case(a,b,c)=>(a,Array(b))})
-     val wordDoc = sc.parallelize(WDM_).reduceByKey( (a,b)=>a ++: b )
+     val wordDoc = sc.parallelize(WDM).map({case(a,b,c)=>(a,Array(b))}).reduceByKey( (a,b)=>a ++: b )
      val rt = wordDoc.collect()
 		 rt
    }
@@ -77,55 +101,41 @@ object wordDocument {
     * function: calculate word-docuemnt matric
     * output  : Array(word, docId, weight)
     */
-   def getWordDocumentMatric(dataDir:String):Array[(String, Int, Double)] = {
-     val f:File = new File(dataDir)                                 
+   def getWordDocumentMatric(dataDir:String):Array[(String, Int, Double)] ={
+     /*
+      * val f:File = new File(dataDir)                                 
      val docPath = subdirs2(f).map(x=>x.toString)      
      val docId = docPath.map(line=>{
        val params = line.split('\\').last       
        (params.split('.'))(0).toInt  
-     })
+     })   
+      */
+     val data = sc.textFile(dataDir+"//total_5000.txt")
+     val dic = data.flatMap(line=>{
+       val param = line.split('|')
+       //line : docID | title | class | url | time | content
+       if(param.length >= 6){
+         val docID = param(0).toInt
+         val words = param(5).split(" ")
+         words.zipAll(Array(docID), "NULL",docID)
+       }
+       else
+         Array(("NULL",0))
+     }).map({case(x,y)=>((x,y),1.0)})//.reduceByKey((a,b)=>a+b).map({case((a,b),c)=>(a,b,c)})   
+     //dic.collect()
      
-     var dictionary = Array[((String, Int), Double)]()
-     for (i <- 0 to docId.length-1){
-       val words = getWords(docPath(i), docId(i))//((word, docId), freq)       
-       dictionary ++= words
-     }
-     val dic_s = sc.parallelize(dictionary.toList)
-     val dic_wordFreq = dic_s.reduceByKey((a,b)=>a+b).map({case((a,b),c)=>(a,b,c)}) 
-     
-     //tf*idf
-     //(docId, docLen) how many word a document contains
-     val docLen = dic_s.map({case((word,docId),freq)=>(docId,freq.toDouble)}).reduceByKey((a,b)=>a+b)
+     val docLen = dic.map({case((word,docId),freq)=>(docId,freq)}).reduceByKey((a,b)=>a+b)
      //(word, wordFreq) how many times a word appears in all documents
-     val wordNum = dic_s.map({case((word, docId),freq)=>(word, 1.0)}).reduceByKey((a,b)=>a+b)
-     val dic_tfidf = dic_s.map({case((word,doc),freq)=>(word,(doc,freq))}).join(wordNum)
+     val wordNum = dic.map({case((word, docId),freq)=>(word, 1.0)}).reduceByKey((a,b)=>a+b)
+     val dic_tfidf = dic.map({case((word,doc),freq)=>(word,(doc,freq))}).join(wordNum)
                          .map({case(word,((doc,freq),wordNum)) => (doc, (word, freq, wordNum))}).join(docLen)
-                         .map({case(doc, ((word, freq, wordNum),docLen)) => (word, doc, freq.toDouble/docLen * scala.math.log(wordNum/(freq.toDouble+1) + 1))})
+                         .map({case(doc, ((word, freq, wordNum),docLen)) => (word, doc, freq/docLen * scala.math.log(wordNum/(freq.toDouble+1) + 1))})
      
-     val dic_rt = dic_tfidf.distinct   
+     val dic_rt = dic_tfidf.distinct     
      
-     //val dic_rt = dic_wordFreq
-     dic_rt.collect()
-   } 
-   /*
-    * function : get words from file
-    * output   : Array, element ((word, docId), 1)
-    */
-   def getWords(docPath :String, docId:Int) : Array[((String, Int), Double)]= {        
-      val line : String = Source.fromFile(docPath).mkString
-      if(line != "" && line.split('|').length > 4)
-      {
-        //line : title | class | url | time | content
-        val words = (line.split('|'))(4).split(" ")
-        val rt = words.map( line=>((line,docId),1.0))
-        rt
-      }
-      else
-      {
-        Array((("NULL",0),0.0))  
-      }
-   } 
-   
+     dic_rt.collect()   
+   }
+  
    def outputInverseDocumentMatric(IDM:Array[(String,Array[Int])], outputDir:String)={
      val writer = new PrintWriter(new File(outputDir))
      val wArr = IDM.map({case(a,b) => a+","+b.mkString(",")})
@@ -143,8 +153,8 @@ object wordDocument {
    }
    
    def inputInverseDocumentMatric(filePath:String):Array[(String,Array[Int])]={
-     val data = Source.fromFile(filePath).mkString
-     data.split('\n').map(line=>{
+     val data = sc.textFile(filePath)
+     val rt = data.map(line=>{
          if(line != "")
          {
            //word, docId, docId, docId...
@@ -154,11 +164,12 @@ object wordDocument {
          else
            ("Null",Array[Int](0))
      })
+     rt.collect()
    }
    
    def inputWordDocumentMatric(filePath:String):Array[(String, Int, Double)]={
-     val data = Source.fromFile(filePath).mkString
-     data.split('\n').map(line=>{
+     val data = sc.textFile(filePath)
+     val rt = data.map(line=>{
        if(line != "")
        {
          val param = line.split(",")
@@ -170,6 +181,7 @@ object wordDocument {
        else
          ("NULL", 0, 0.0)       
      })
+     rt.collect()
    }
 
    def printWDM(WDM:Array[(String,Int, Double)]) = {
