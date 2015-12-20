@@ -3,23 +3,24 @@ package edu.thu.ss.PPTSearchEngine.Cluster
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
+import edu.thu.ss.PPTSearchEngine.Properties.Config
 
 class PPTCluster {
   val conf = new SparkConf().setAppName("app").setMaster("local")
   val sc = new SparkContext(conf)
   var result: RDD[(Int, Int)] = null
   
-  val WordDocumentMatric = sc.textFile("D:\\dataBig\\WDM.txt").map { line => {
+  val WordDocumentMatric = sc.textFile(Config.getString("WDMdir")).map { line => {
       val params = line.split(",")
       (params(0), params(1).toInt, params(2).toDouble)
     }}
   
-  def KMeans(k: Int, scale: Int, round: Int) {
+  def KMeans(k: Int, round: Int, docId: Array[Int]) {
     val random = scala.util.Random
-    var indexes = Array[Int]()
+    var indexes = Array[Int]() 
     for (i <- 1 to k) {
-      val index = random.nextInt(scale - 1) + 1
-      indexes = indexes :+ index
+      val index = random.nextInt(docId.length - 1) 
+      indexes = indexes :+ docId(index)
     } 
     var centers = GetClusterCenters(indexes)
     for (i <- 1 to round) {
@@ -73,9 +74,12 @@ class PPTCluster {
     .reduceByKey((a,b)=>a++:b).collect()
   }
   
+  /*
   def main(args: Array[String]) {
     KMeans(10,5000,10)
     OutputClusterResult()
   }
+  * 
+  */
   
 }
