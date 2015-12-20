@@ -1,18 +1,26 @@
 package edu.thu.ss.PPTSearchEngine
 
-import org.apache.spark.SparkContext._
+import edu.thu.ss.PPTSearchEngine.Properties.Config
 import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
-import scala.io.Source
-import java.io.File
-import collection.mutable.ArrayBuffer
-import edu.thu.ss.PPTSearchEngine.Properties.Config
 
-object App {  
- 
-   def main(args : Array[String]){
- 
-   }   
-  
+object App {
+
+  def main(args: Array[String]) {
+    
+    val searcher = new PPTSearcher
+    val result = searcher.search(Config.getString("query"))
+    /*
+    val conf = new SparkConf().setAppName("app").setMaster("local")
+    val sc = new SparkContext(conf)
+    val docIds = Array(3504)
+    val data = sc.textFile(Config.getString("dataDir"))
+     .filter { line => docIds.contains(line.split('|').head.toInt) }
+      .map { line => line.split('|') }.collect()
+      println(data.size)
+      * 
+      */
+  }
+
 }
 
