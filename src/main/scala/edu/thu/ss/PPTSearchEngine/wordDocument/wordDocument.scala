@@ -19,46 +19,46 @@ object wordDocument {
      val WDMdir = Config.getString("WDMdir")
      val IDMdir = Config.getString("IDMdir")
      val query = Config.getString("query")    
-       
+     val docLenDir = Config.getString("docLenDir")
      /*
       * WDM.txt, each line is word, docId, weight
-      * IDM.txt, each line is word, docId, docId, docId...
-      * 
-          
+      * IDM.txt, each line is word, docId, docId, docId... 
+        */
       
-     val WDM = getWordDocumentMatric(dataDir)      
+     val WDM = getWordDocumentMatric(dataDir, docLenDir)      
      outputWordDocumentMatric(WDM.collect(),WDMdir) 
      //printWDM(WDM)   
      val IDM = getInverseDocumentMatric(WDM) 
      outputInverseDocumentMatric(IDM.collect(), IDMdir)     
      //printIDM(IDM)
-      * 
-      */
+   	  
      
      /* if already have WDM.txt and IDM.txt
-      * 
-      */
-     
+      *
      val WDM = inputWordDocumentMatric(WDMdir)
-     val IDM = inputInverseDocumentMatric(IDMdir)   
+     val IDM = inputInverseDocumentMatric(IDMdir)    
      
+     val docLenSq = inputDocumentLengthSquare(docLenDir)
      val result = search_bool(query, IDM)     
-     val sortedResult = search_VSM(query, result, WDM)
+     
+     val sortedResult = search_VSM(query, result, docLenSq, WDM)
      println("query: " + query)
      println("result: " + result.mkString(","))   
      println("sorted: " + result.mkString(","))   
+     */
+     
      sc.stop()    
    }  
    
   
    
-   def search_VSM(query:String,relatedDoc:Array[Int], WDM:RDD[(String, Int, Double)]):Array[Int]= {
+   def search_VSM(query:String,relatedDoc:Array[Int], docLenSq:RDD[(Int, Double)], WDM:RDD[(String, Int, Double)]):Array[Int]= {
       
       val words = query.split(" ")  
-      val vec = sc.makeRDD(Array(query)).flatMap(line=>line.split(" ")).map(x=>(x,1)).reduceByKey((a,b)=>a+b)
+      val vec = sc.makeRDD(Array(query)).flatMap(line=>line.split(" ")).map(x=>(x,1)).reduceByKey((a,b)=>a+b)//TODO
       val vecLenSq = vec.map({case(x,y)=>y*y}).sum()
       val wdm_rdd = WDM
-      val docLenSq = wdm_rdd.map({case(t,d,w)=>(d,w*w)}).reduceByKey((a,b)=>a+b).filter(line=>relatedDoc.contains(line._1))
+      //val docLenSq = wdm_rdd.map({case(t,d,w)=>(d,w*w)}).reduceByKey((a,b)=>a+b).filter(line=>relatedDoc.contains(line._1))
       val wdm = wdm_rdd.filter(line=>words.contains(line._1) && relatedDoc.contains(line._2))  
       val cosine = wdm.map({case(t,d,w)=>(t,(d,w))}).join(vec)
                  .map({case(t,((d,w),w2))=>(d,(t,w,w2))}).join(docLenSq)
@@ -90,7 +90,7 @@ object wordDocument {
     * function: calculate word-docuemnt matric
     * output  : Array(word, docId, weight)
     */
-   def getWordDocumentMatric(dataDir:String):RDD[(String, Int, Double)] ={
+   def getWordDocumentMatric(dataDir:String, dataDir2:String):RDD[(String, Int, Double)] ={
      /*
       * val f:File = new File(dataDir)                                 
      val docPath = subdirs2(f).map(x=>x.toString)      
@@ -99,7 +99,7 @@ object wordDocument {
        (params.split('.'))(0).toInt  
      })   
       */
-     val data = sc.textFile(dataDir+"//total_5000.txt")
+     val data = sc.textFile(dataDir)
      val dic = data.flatMap(line=>{
        val param = line.split('|')
        //line : docID | title | class | url | time | content
@@ -119,8 +119,15 @@ object wordDocument {
      val dic_tfidf = dic.map({case((word,doc),freq)=>(word,(doc,freq))}).join(wordNum)
                          .map({case(word,((doc,freq),wordNum)) => (doc, (word, freq, wordNum))}).join(docLen)
                          .map({case(doc, ((word, freq, wordNum),docLen)) => (word, doc, freq/docLen * scala.math.log(wordNum/(freq.toDouble+1) + 1))})
+     val dic_rt = dic_tfidf.distinct  
      
-     val dic_rt = dic_tfidf.distinct       
+     //output document length square
+     val writer = new PrintWriter(new File(dataDir2))
+     val docLenSq = dic.map({case((word,docId),freq)=>(docId,freq*freq)}).reduceByKey((a,b)=>a+b)
+     val docLenSq_str = docLenSq.map({case(a,b)=>a.toString+","+b.toString}).collect().mkString("\n")
+     writer.write(docLenSq_str)
+     writer.close()
+     
      dic_rt 
    }
   
@@ -133,8 +140,8 @@ object wordDocument {
   
    def outputWordDocumentMatric(WDM:Array[(String, Int, Double)], outputDir:String)={
      val writer = new PrintWriter(new File(outputDir))
-     val wStr = WDM.map({case(a,b,c) => a+","+b.toString() + ","+c.toString()}).mkString("\n")
-     writer.write(wStr)
+     val wStr = WDM.map({case(a,b,c) => a+","+b.toString() + ","+c.toString()})
+     wStr.foreach(x=>writer.write(x))     
      writer.close()
    }
    
@@ -152,6 +159,14 @@ object wordDocument {
      data.map(line=>{
        val param = line.split(",")
        (param(0), param(1).toInt, param(2).toDouble)         
+     })
+   }
+   
+   def inputDocumentLengthSquare(filePath:String):RDD[(Int, Double)]={
+     val data = sc.textFile(filePath)
+     data.map(line=>{
+       val param = line.split(",")
+       (param(0).toInt, param(1).toDouble)
      })
    }
 
