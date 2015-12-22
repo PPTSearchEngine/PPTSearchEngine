@@ -15,9 +15,10 @@ import org.apache.spark.rdd.RDD
  */
 class PPTResultDocument(docId: Int, query: String, labels: Array[String], data: Array[Array[String]]) extends java.io.Serializable {
   println(docId)
+  val label = labels(0)
   val line = data.filter(line=>line.head.equals(docId.toString)).head
   val Title: String = line(1)
-  val DocId: String = line(2)
+  val DocId: String = line(0)
   val Url: String = line(3)
   //(year, month, dya)
   val Date: (Int, Int, Int) = {
@@ -43,11 +44,11 @@ class PPTResultDocument(docId: Int, query: String, labels: Array[String], data: 
   }
 }
 
-class PPTResultSet(docIds: Array[Int], query: String, k: Int, searcher: PPTSearcher)  extends java.io.Serializable {
+class PPTResultSet(docIds: Array[Int], query: String, k: Int, sc: SparkContext)  extends java.io.Serializable {
   val RetrievalDoc: Array[PPTResultDocument] = {
-    val cluster = new PPTCluster(docIds, searcher.sc)
+    val cluster = new PPTCluster(docIds, sc)
     val result = cluster.KMeans(k, 3)
-    val data = searcher.sc.textFile(Config.getString("dataDir"))
+    val data = sc.textFile(Config.getString("dataDir"))
      .filter { line => docIds.contains(line.split('|').head.toInt) }
       .map { line => line.split('|') }.collect()
     result.map {

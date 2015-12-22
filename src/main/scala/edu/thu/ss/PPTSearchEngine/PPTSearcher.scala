@@ -12,10 +12,10 @@ import java.io._
 import org.apache.spark.rdd.RDD
 import edu.thu.ss.PPTSearchEngine.Cluster.PPTCluster
 
-class PPTSearcher {
+object PPTSearcher {
   val conf = new SparkConf().setAppName("app").setMaster("local[5]")
-  val sc = new SparkContext(conf)
-
+     conf.set("spark.driver.allowMultipleContexts" , "true") 
+    val sc = new SparkContext(conf)
   val dataDir = Config.getString("dataDir")
   val WDMdir = Config.getString("WDMdir")
   val IDMdir = Config.getString("IDMdir")
@@ -41,7 +41,7 @@ class PPTSearcher {
     val relatedDoc = search1(query)
     val resultDoc = searchVSM(query, relatedDoc)
     //val resultDoc = search(query)
-    new PPTResultSet(resultDoc, query, 4, this)
+    new PPTResultSet(resultDoc, query, 4, sc)
   }
   
   def search1(query: String): Array[Int] = {
