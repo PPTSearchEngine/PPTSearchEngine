@@ -16,7 +16,7 @@ import org.apache.spark.rdd.RDD
 class PPTResultDocument(docId: Int, query: String, labels: Array[String], data: Array[Array[String]]) extends java.io.Serializable {
   println(docId)
   val label = labels(0)
-  val line = data.filter(line=>line.head.equals(docId.toString)).head
+  val line = data.filter(line => line.head.equals(docId.toString)).head
   val Title: String = line(1)
   val DocId: String = line(0)
   val Url: String = line(3)
@@ -27,15 +27,17 @@ class PPTResultDocument(docId: Int, query: String, labels: Array[String], data: 
   }
   val document = line.last.split(" ")
 
-  val KeyWordIndex = query.map { keyword => document.indexOf(keyword) }.toSet
+  val KeyWordIndex = query.split(" ").map { keyword => document.indexOf(keyword) }.filter(index => index != -1).toSet
+
+  val offset = 300 / KeyWordIndex.size / 2
 
   val Abstract: String = {
-    val index = KeyWordIndex.map { index => (index - 5 to index + 5).toArray }.fold(Array[Int]())((a, b) => a ++ b).sorted
-      .filter(number => number >= 0 && number < document.length).toSet.toList
+    val index = KeyWordIndex.map { index => (index - offset to index + offset).toArray }.fold(Array[Int]())((a, b) => a ++ b)
+      .filter(number => number >= 0 && number < document.length).toSet.toList.sorted
 
     def insertDot(index: List[Int]): List[Int] = {
       index match {
-        case n1 :: n2 :: ns => if (n2 - n1 > 2) n1 :: (-1) :: n2 :: insertDot(ns) else n1 :: n2 :: insertDot(ns)
+        case n1 :: n2 :: ns => if (n2 - n1 > 2) n1 :: (-1) :: insertDot(n2 :: ns) else n1 :: insertDot(n2 :: ns)
         case ns             => ns
       }
     }
@@ -44,17 +46,21 @@ class PPTResultDocument(docId: Int, query: String, labels: Array[String], data: 
   }
 }
 
-class PPTResultSet(docIds: Array[Int], query: String, k: Int, sc: SparkContext)  extends java.io.Serializable {
+class PPTResultSet(docIds: Array[Int], query: String, k: Int, sc: SparkContext) extends java.io.Serializable {
   val RetrievalDoc: Array[PPTResultDocument] = {
-    val cluster = new PPTCluster(docIds, sc)
-    val result = cluster.KMeans(k, 3)
-    val data = sc.textFile(Config.getString("dataDir"))
-     .filter { line => docIds.contains(line.split('|').head.toInt) }
-      .map { line => line.split('|') }.collect()
-    result.map {
-      case (docId, label) =>
-        println(label)
-        new PPTResultDocument(docId, query, Array(label), data)
+    if (docIds.length == 0) {
+      Array()
+    } else {
+      val cluster = new PPTCluster(docIds, sc)
+      val result = cluster.KMeans(k, 3)
+      val data = sc.textFile(Config.getString("dataDir"))
+        .filter { line => docIds.contains(line.split('|').head.toInt) }
+        .map { line => line.split('|') }.collect()
+      result.map {
+        case (docId, label) =>
+          println(label)
+          new PPTResultDocument(docId, query, Array(label), data)
+      }
     }
   }
 }
