@@ -28,12 +28,12 @@ class PPTResultDocument(docId: Int, query: String, labels: Array[String], data: 
   val document = line.last.split(" ")
 
   val KeyWordIndex = query.split(" ").map { keyword => document.indexOf(keyword) }.filter(index => index != -1).toSet
- 
-  val offset = 300 / KeyWordIndex.size / 2
+
+  val offset = 150 / KeyWordIndex.size / 2
 
   val Abstract: String = {
     val index = KeyWordIndex.map { index => (index - offset to index + offset).toArray }.fold(Array[Int]())((a, b) => a ++ b)
-      .filter(number => number >= 0 && number < document.length).toSet.toList.sorted
+      .filter(number => number >= 0 && number < document.length).toSet.toList.sorted.take(140)
 
     def insertDot(index: List[Int]): List[Int] = {
       index match {

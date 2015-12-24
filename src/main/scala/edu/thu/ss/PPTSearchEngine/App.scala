@@ -63,12 +63,10 @@ object App {
     val result = searcher.search("吴彦祖")
     result.RetrievalDoc.foreach { doc => println(doc.DocId+doc.Abstract) }
     */
-    
-    val conf = new SparkConf().setAppName("app").setMaster("local")
-    val sc = new SparkContext(conf)
-    
-    val rs = new PPTResultSet(Array(),"123",4,sc)
-    println(rs.RetrievalDoc.length)
+    val searcher =  PPTSearcher
+
+    val result = searcher.search("吴彦祖")
+    result.RetrievalDoc.foreach { doc => println(doc.DocId+doc.Abstract) }
   }
 
 }

@@ -29,7 +29,7 @@ object PPTSearcher {
   val WDM = sc.textFile(WDMdir).map(line => {
     val param = line.split(",")
     (param(0), param(1).toInt, param(2).toDouble)
-  }).cache()
+  })
   /*
   val IDM = sc.textFile(IDMdir).map(line => {
     val param = line.split(",")
@@ -45,8 +45,12 @@ object PPTSearcher {
     //val relatedDoc = search1(query)
     //val resultDoc = searchVSM(query, relatedDoc)
     val resultDoc = search2(query)
-    println(resultDoc.mkString(","))
-    new PPTResultSet(resultDoc.take(100), query, 4, sc)
+    if (resultDoc.length < 100) {
+      new PPTResultSet(resultDoc, query, 4, sc)
+    } else {
+      new PPTResultSet(resultDoc, query, resultDoc.length / 25, sc)
+    }
+    
   }
   
   def search2(query: String): Array[Int] = {

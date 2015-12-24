@@ -63,6 +63,10 @@ class PPTCluster(docIds: Array[Int], sc: SparkContext) extends java.io.Serializa
     groups.map{ case(d,(c,f)) => (c,d)}.join(labels).map{case (c,(d,l)) => (d,l)}.collect()    
   }
   
+  def filterTerm(str: String) : Boolean ={
+    (str forall Character.isDigit) || str.contains(".") || str.length() == 1 || (str.head >= 'a' && str.head <= 'Z')
+  }
+  
   /*
   def main(args: Array[String]) {
     val docId = "1485,1840,66,471,1056,211,907,1357,338,608,763,1624,1209,9399,2031,1892,2238,2104,4341,4501,4199,1433,1297,2347,2477,2012,2607,2228,1804,2094,530,3730,4209,4587,4293,4443,3601,3726,3858,1994,340,2028,480,347,9922,645,795,365,1082,939,4024,2260,2511,2372"
