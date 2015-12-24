@@ -4,12 +4,10 @@ import org.apache.spark.SparkConf
 import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import edu.thu.ss.PPTSearchEngine.Properties.Config
+import edu.thu.ss.PPTSearchEngine.PPTSearcher
 
 class PPTCluster(docIds: Array[Int], sc: SparkContext) extends java.io.Serializable {  
-  val WordDocumentMatric = sc.textFile(Config.getString("WDMdir")).map { line => {
-      val params = line.split(",")
-      (params(0), params(1).toInt, params(2).toDouble)
-    }}.filter{case (w,d,f) => docIds.contains(d.toInt)}
+  val WordDocumentMatric = PPTSearcher.WDM.filter{case (w,d,f) => docIds.contains(d.toInt)}
   
   def KMeans(k: Int, round: Int) : Array[(Int, String)] = {
     val random = scala.util.Random
