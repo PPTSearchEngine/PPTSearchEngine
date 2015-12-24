@@ -47,7 +47,7 @@ class PPTCluster(docIds: Array[Int], sc: SparkContext) extends java.io.Serializa
   
   def CollectResult(centers: RDD[(String, Int, Double)]) : Array[(Int, String)] = {
     
-    val CENTER = centers.map{ case (w,c,f) => (w, (c,f))}
+    val CENTER = centers.map{ case (w,c,f) => (w, (c,f))}.filter{case (w,(c,f)) => !filterTerm(w)} 
     val joinresult = WDM_wdf.join(CENTER).map{ case (w,((d,f1),(c,f2))) => (d,c)->(f1-f2)*(f1-f2)}
       .reduceByKey((a,b)=>a+b)
     val groups = joinresult.map{case ((d,c),f) => (d,(c,f))}.reduceByKey((a,b) => {     
