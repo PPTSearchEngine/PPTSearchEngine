@@ -22,6 +22,7 @@ class PPTCluster(docIds: Array[Int], sc: SparkContext) extends java.io.Serializa
       centers = KmeansCluster(centers)
     }
     CollectResult(centers)
+    
   }
   
   //word, docId, frequency

@@ -28,7 +28,7 @@ class PPTResultDocument(docId: Int, query: String, labels: Array[String], data: 
   val document = line.last.split(" ")
 
   val KeyWordIndex = query.split(" ").map { keyword => document.indexOf(keyword) }.filter(index => index != -1).toSet
-
+ 
   val offset = 300 / KeyWordIndex.size / 2
 
   val Abstract: String = {

@@ -45,7 +45,8 @@ object PPTSearcher {
     //val relatedDoc = search1(query)
     //val resultDoc = searchVSM(query, relatedDoc)
     val resultDoc = search2(query)
-    new PPTResultSet(resultDoc, query, 4, sc)
+    println(resultDoc.mkString(","))
+    new PPTResultSet(resultDoc.take(100), query, 4, sc)
   }
   
   def search2(query: String): Array[Int] = {
