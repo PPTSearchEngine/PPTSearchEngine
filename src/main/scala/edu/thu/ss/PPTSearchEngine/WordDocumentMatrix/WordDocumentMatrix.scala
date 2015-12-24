@@ -13,7 +13,7 @@ import org.apache.spark.rdd.RDD
 
 object WordDocumentMatrix {    
   
-   val conf = new SparkConf().setAppName("app").setMaster("local[6]")
+   val conf = new SparkConf().setAppName("app").setMaster("local[10]")
    val sc = new SparkContext(conf)  
    
    def main(args : Array[String]){ 
@@ -29,8 +29,8 @@ object WordDocumentMatrix {
      val WDM = getWordDocumentMatrix(dataDir, docLenDir)      
      outputWordDocumentMatrix(WDM,WDMdir) 
      //printWDM(WDM)   
-     val IDM = getInverseDocumentMatric(WDM) 
-     outputInverseDocumentMatrix(IDM, IDMdir)     
+     //val IDM = getInverseDocumentMatric(WDM) 
+     //outputInverseDocumentMatrix(IDM, IDMdir)     
      //printIDM(IDM)    
      sc.stop()    
    }  
@@ -55,6 +55,8 @@ object WordDocumentMatrix {
      })   
       */
      val data = sc.textFile(dataDir)
+     val dataLength = data.count()
+     println(dataLength)
      val dic = data.flatMap(line=>{
        val param = line.split('|')
        //line : docID | title | class | url | time | content
@@ -65,7 +67,7 @@ object WordDocumentMatrix {
        }
        else
          Array(("NULL",0))
-     }).map({case(x,y)=>((x,y),1.0)})//.reduceByKey((a,b)=>a+b).map({case((a,b),c)=>(a,b,c)})   
+     }).map({case(x,y)=>((x,y),1.0)}).reduceByKey((a,b)=>a+b)//.map({case((a,b),c)=>(a,b,c)})   
      //dic.collect()
      
      val docLen = dic.map({case((word,docId),freq)=>(docId,freq)}).reduceByKey((a,b)=>a+b)
@@ -73,17 +75,14 @@ object WordDocumentMatrix {
      val wordNum = dic.map({case((word, docId),freq)=>(word, 1.0)}).reduceByKey((a,b)=>a+b)
      val dic_tfidf = dic.map({case((word,doc),freq)=>(word,(doc,freq))}).join(wordNum)
                          .map({case(word,((doc,freq),wordNum)) => (doc, (word, freq, wordNum))}).join(docLen)
-                         .map({case(doc, ((word, freq, wordNum),docLen)) => (word, doc, freq/docLen * scala.math.log(wordNum/(freq.toDouble+1) + 1))})
-     val dic_rt = dic_tfidf.distinct  
-     
+                         .map({case(doc, ((word, freq, wordNum),docLen)) => (word, doc, freq/docLen * scala.math.log10(dataLength.toDouble/(wordNum) ))})
      //output document length square
      val writer = new PrintWriter(new File(dataDir2))
      val docLenSq = dic.map({case((word,docId),freq)=>(docId,freq*freq)}).reduceByKey((a,b)=>a+b)
      val docLenSq_str = docLenSq.map({case(a,b)=>a.toString+","+b.toString}).collect().mkString("\n")
      writer.write(docLenSq_str)
-     writer.close()
-     
-     dic_rt 
+     writer.close()     
+     dic_tfidf
    }
      
    def outputInverseDocumentMatrix(IDM:RDD[(String,Array[Int])], outputDir:String)={
